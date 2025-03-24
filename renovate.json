@@ -1,16 +1,21 @@
 {
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
   "schedule": [
     "before 3am on the first day of the month"
   ],
-  "docker": {
-    "enabled": true
-  },
   "packageRules": [
     {
-      "matchDatasources": ["docker"],
+      "matchCategories": [
+        "docker"
+      ],
+      "enabled": true
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
       "groupName": "docker images"
     }
   ]
