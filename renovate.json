@@ -12,6 +12,10 @@
     {
       "matchDatasources": ["docker"],
       "groupName": "docker images"
+    },
+    {
+      "matchDatasources": ["npm"],
+      "groupName": "npm packages"
     }
   ]
 }

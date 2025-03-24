@@ -57,6 +57,7 @@ This configuration sets up the following services:
 - **qbittorrent**: A BitTorrent client.
 - **sonarr**: A PVR for Usenet and BitTorrent users.
 - **prowlarr**: An indexer manager/proxy for Sonarr, Radarr, and other applications.
+- **jackett**: A proxy server for torrent indexers.
 
 #### Networks
 - `torrent_network`: A bridge network for the services.
@@ -65,7 +66,7 @@ This configuration sets up the following services:
 - `qbittorrent`
   - **Container Name**: `qbittorrent`
     - The name of the container.
-  - **Image**: `lscr.io/linuxserver/qbittorrent:latest`
+  - **Image**: `lscr.io/linuxserver/qbittorrent:4.4.0`
     - The Docker image to use for the container.
   - **Environment**: `PUID=1000`, `PGID=1000`, `TZ=Etc/UTC`, `WEBUI_PORT=8080`, `DOCKER_MODS=ghcr.io/vuetorrent/vuetorrent-lsio-mod:latest`
     - Sets environment variables in the container:
@@ -112,6 +113,23 @@ This configuration sets up the following services:
     - Mounts the local directory `/home/jorn/prowlarr/config` to the container's `/config` directory.
   - **Ports**: `9696:9696`
     - Maps port 9696 in the container to port 9696 on the host.
+  - **Networks**: `torrent_network`
+    - Connects the container to the `torrent_network` network.
+
+- `jackett`
+  - **Container Name**: `jackett`
+    - The name of the container.
+  - **Image**: `lscr.io/linuxserver/jackett:latest`
+    - The Docker image to use for the container.
+  - **Environment**: `PUID=1000`, `PGID=1000`, `TZ=Etc/UTC`
+    - Sets environment variables in the container:
+      - `PUID=1000`: The user ID to run the container as.
+      - `PGID=1000`: The group ID to run the container as.
+      - `TZ=Etc/UTC`: The timezone to use in the container.
+  - **Volumes**: `/home/jorn/jackett/config:/config`
+    - Mounts the local directory `/home/jorn/jackett/config` to the container's `/config` directory.
+  - **Ports**: `9117:9117`
+    - Maps port 9117 in the container to port 9117 on the host.
   - **Networks**: `torrent_network`
     - Connects the container to the `torrent_network` network.
 
