@@ -2,7 +2,6 @@ networks:
   proxy-net:
     driver: bridge
 
-
 services:
   vaultwarden:
     container_name: vaultwarden
@@ -14,7 +13,8 @@ services:
     image: vaultwarden/server:latest
     networks:
       - proxy-net
-  npm:
+  reverse-proxy:
+    container_name: reverse-proxy
     image: 'jc21/nginx-proxy-manager:latest'
     restart: unless-stopped
     ports:
