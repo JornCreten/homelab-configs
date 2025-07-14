@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omni-core.fullname" . }}-omni
+  labels:
+    {{- include "omni-core.labels" . | nindent 4 }}
+    app.kubernetes.io/component: omni
+spec:
+  type: {{ .Values.omni.service.type }}
+  ports:
+  - port: {{ .Values.omni.service.port }}
+    targetPort: {{ .Values.omni.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "omni-core.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: omni
+---
+{{- if .Values.nginx.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omni-core.fullname" . }}-nginx
+  labels:
+    {{- include "omni-core.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+spec:
+  type: {{ .Values.nginx.service.type }}
+  ports:
+  - port: {{ .Values.nginx.service.ports.http }}
+    targetPort: 80
+    protocol: TCP
+    name: http
+  - port: {{ .Values.nginx.service.ports.https }}
+    targetPort: 443
+    protocol: TCP
+    name: https
+  - port: {{ .Values.nginx.service.ports.status }}
+    targetPort: 8080
+    protocol: TCP
+    name: status
+  - port: {{ .Values.nginx.service.ports.machineAPI }}
+    targetPort: 8090
+    protocol: TCP
+    name: machine-api
+  - port: {{ .Values.nginx.service.ports.k8sProxy }}
+    targetPort: 8100
+    protocol: TCP
+    name: k8s-proxy
+  - port: {{ .Values.nginx.service.ports.wireguard }}
+    targetPort: 50180
+    protocol: UDP
+    name: wireguard
+  selector:
+    {{- include "omni-core.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+{{- end }}
+---
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omni-core.fullname" . }}-redis
+  labels:
+    {{- include "omni-core.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: {{ .Values.redis.service.type }}
+  ports:
+  - port: {{ .Values.redis.service.port }}
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    {{- include "omni-core.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+{{- end }}

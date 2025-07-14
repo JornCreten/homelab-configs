@@ -1,0 +1,193 @@
+# Authentication Services Configuration
+# Keycloak SAML provider with PostgreSQL database
+
+global:
+  domain: omni.example.com
+  timezone: UTC
+
+# Keycloak Configuration
+keycloak:
+  enabled: true
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "25.0.2"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Keycloak configuration
+  config:
+    adminUser: admin
+    adminPassword: "" # Will be generated if empty
+
+    # Database configuration
+    database:
+      vendor: postgres
+      host: "" # Will be set to postgres service if enabled
+      port: 5432
+      name: keycloak
+      username: keycloak
+      password: "" # Will be generated if empty
+
+    # Hostname configuration
+    hostname:
+      strict: false
+      strictBackchannel: false
+
+    # HTTP configuration
+    http:
+      enabled: true
+      port: 8080
+
+    # HTTPS configuration (if SSL is handled by ingress)
+    https:
+      enabled: false
+      port: 8443
+
+    # Health checks
+    health:
+      enabled: true
+
+    # Metrics
+    metrics:
+      enabled: true
+
+  # Ingress configuration
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+    - host: keycloak.omni.example.com
+      paths:
+      - path: /
+        pathType: Prefix
+    tls:
+    - secretName: keycloak-tls
+      hosts:
+      - keycloak.omni.example.com
+
+# PostgreSQL Configuration
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # PostgreSQL configuration
+  config:
+    database: keycloak
+    username: keycloak
+    password: "" # Will be generated if empty
+    postgresPassword: "" # Will be generated if empty
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 5Gi
+
+  # Security
+  security:
+    seccompProfile:
+      type: RuntimeDefault
+    capabilities:
+      drop:
+      - ALL
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+
+# Nginx Configuration (for SSL termination to Keycloak)
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: alpine
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: LoadBalancer
+    ports:
+      http: 80
+      https: 443
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  # SSL configuration
+  ssl:
+    enabled: true
+    secretName: keycloak-tls
+
+# Service Monitor for Prometheus (if monitoring is enabled)
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  interval: 30s
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selector, tolerations, and affinity
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Additional labels and annotations
+labels: {}
+annotations: {}

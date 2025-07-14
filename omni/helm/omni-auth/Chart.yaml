@@ -1,0 +1,26 @@
+apiVersion: v2
+name: omni-auth
+description: Authentication services for Omni (Keycloak and PostgreSQL)
+type: application
+version: 0.1.0
+appVersion: "25.0.2"
+
+keywords:
+- authentication
+- keycloak
+- saml
+- omni
+
+home: https://keycloak.org/
+sources:
+- https://github.com/keycloak/keycloak
+
+maintainers:
+- name: Keycloak Team
+  email: keycloak-dev@lists.jboss.org
+
+dependencies: []
+
+annotations:
+  category: Security
+  licenses: Apache-2.0

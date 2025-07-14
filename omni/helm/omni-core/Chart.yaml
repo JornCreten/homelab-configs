@@ -1,0 +1,26 @@
+apiVersion: v2
+name: omni-core
+description: Core Omni Kubernetes management platform
+type: application
+version: 0.1.0
+appVersion: "0.41.0"
+
+keywords:
+- kubernetes
+- management
+- omni
+- sidero
+
+home: https://omni.siderolabs.com/
+sources:
+- https://github.com/siderolabs/omni
+
+maintainers:
+- name: Omni Team
+  email: support@siderolabs.com
+
+dependencies: []
+
+annotations:
+  category: Infrastructure
+  licenses: BSL-1.1

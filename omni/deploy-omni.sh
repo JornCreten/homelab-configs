@@ -23,8 +23,10 @@ OMNI_VERSION="${OMNI_VERSION:-0.41.0}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
 WG_IP="${WG_IP:-10.10.1.100}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+AUTH_PROVIDER="${AUTH_PROVIDER:-auth0}"
 AUTH0_CLIENT_ID="${AUTH0_CLIENT_ID:-}"
 AUTH0_DOMAIN="${AUTH0_DOMAIN:-}"
+SAML_URL="${SAML_URL:-}"
 CERT_EMAIL="${CERT_EMAIL:-}"
 DNS_PROVIDER="${DNS_PROVIDER:-digitalocean}"
 
@@ -61,8 +63,10 @@ Usage: $0 [OPTIONS]
 Options:
     -d, --domain DOMAIN          Domain name for Omni (required)
     -e, --email EMAIL           Admin email address (required)
-    -a, --auth0-client CLIENT   Auth0 client ID (required)
-    -A, --auth0-domain DOMAIN   Auth0 domain (required)
+    -a, --auth0-client CLIENT   Auth0 client ID (required for auth0)
+    -A, --auth0-domain DOMAIN   Auth0 domain (required for auth0)
+    -s, --saml-url URL          SAML endpoint URL (required for saml)
+    -P, --auth-provider TYPE    Authentication provider: auth0 or saml (default: auth0)
     -c, --cert-email EMAIL      Email for SSL certificate generation
     -p, --dns-provider PROVIDER DNS provider for certbot (default: digitalocean)
     -v, --version VERSION       Omni version (default: $OMNI_VERSION)
@@ -77,6 +81,8 @@ Environment Variables:
     ADMIN_EMAIL                 Admin email address
     AUTH0_CLIENT_ID            Auth0 client ID
     AUTH0_DOMAIN               Auth0 domain
+    SAML_URL                   SAML endpoint URL
+    AUTH_PROVIDER              Authentication provider (auth0 or saml)
     CERT_EMAIL                 Email for SSL certificates
     DNS_PROVIDER               DNS provider for certbot
     OMNI_VERSION               Omni version
@@ -87,6 +93,10 @@ Environment Variables:
 Examples:
     $0 --domain omni.example.com --email admin@example.com \\
        --auth0-client abc123 --auth0-domain dev-xyz.us.auth0.com
+
+   SAML example:
+       ./deploy-omni.sh --domain omni.example.com --email admin@example.com \\
+       --auth-provider saml --saml-url https://keycloak.example.com/realms/omni/protocol/saml
 
     DOMAIN_NAME=omni.example.com ADMIN_EMAIL=admin@example.com $0
 
@@ -111,6 +121,14 @@ parse_args() {
                 ;;
             -A|--auth0-domain)
                 AUTH0_DOMAIN="$2"
+                shift 2
+                ;;
+            -s|--saml-url)
+                SAML_URL="$2"
+                shift 2
+                ;;
+            -P|--auth-provider)
+                AUTH_PROVIDER="$2"
                 shift 2
                 ;;
             -c|--cert-email)
@@ -164,12 +182,27 @@ validate_config() {
         missing_params+=("ADMIN_EMAIL")
     fi
     
-    if [[ -z "$AUTH0_CLIENT_ID" ]]; then
-        missing_params+=("AUTH0_CLIENT_ID")
+    # Validate authentication provider
+    if [[ "$AUTH_PROVIDER" != "auth0" && "$AUTH_PROVIDER" != "saml" ]]; then
+        error "AUTH_PROVIDER must be either 'auth0' or 'saml', got: $AUTH_PROVIDER"
     fi
     
-    if [[ -z "$AUTH0_DOMAIN" ]]; then
-        missing_params+=("AUTH0_DOMAIN")
+    # Validate Auth0 configuration
+    if [[ "$AUTH_PROVIDER" == "auth0" ]]; then
+        if [[ -z "$AUTH0_CLIENT_ID" ]]; then
+            missing_params+=("AUTH0_CLIENT_ID")
+        fi
+        
+        if [[ -z "$AUTH0_DOMAIN" ]]; then
+            missing_params+=("AUTH0_DOMAIN")
+        fi
+    fi
+    
+    # Validate SAML configuration
+    if [[ "$AUTH_PROVIDER" == "saml" ]]; then
+        if [[ -z "$SAML_URL" ]]; then
+            missing_params+=("SAML_URL")
+        fi
     fi
     
     if [[ ${#missing_params[@]} -gt 0 ]]; then
@@ -346,8 +379,10 @@ export OMNI_ACCOUNT_UUID=$account_uuid
 export OMNI_DOMAIN_NAME=$DOMAIN_NAME
 export OMNI_WG_IP=$WG_IP
 export OMNI_ADMIN_EMAIL=$ADMIN_EMAIL
+export AUTH_PROVIDER=$AUTH_PROVIDER
 export AUTH0_CLIENT_ID=$AUTH0_CLIENT_ID
 export AUTH0_DOMAIN=$AUTH0_DOMAIN
+export SAML_URL=$SAML_URL
 EOF
     
     # Source the variables
@@ -365,15 +400,67 @@ download_assets() {
     # Source environment variables
     source omni-vars.env
     
-    # Download environment template
-    curl -sSL "https://raw.githubusercontent.com/siderolabs/omni/v${OMNI_VERSION}/deploy/env.template" \
-        | envsubst > omni.env
+    # Download environment template and customize it
+    generate_omni_env
     
     # Download docker-compose file
     curl -sSL "https://raw.githubusercontent.com/siderolabs/omni/v${OMNI_VERSION}/deploy/compose.yaml" \
         -o compose.yaml
     
     log "Omni assets downloaded successfully"
+}
+
+# Generate customized omni.env file based on authentication provider
+generate_omni_env() {
+    log "Generating Omni environment configuration..."
+    
+    # Determine authentication configuration based on provider
+    local auth_config
+    if [[ "$AUTH_PROVIDER" == "auth0" ]]; then
+        auth_config="AUTH='--auth-auth0-enabled=true \\
+      --auth-auth0-domain=${AUTH0_DOMAIN} \\
+      --auth-auth0-client-id=${AUTH0_CLIENT_ID}'"
+    elif [[ "$AUTH_PROVIDER" == "saml" ]]; then
+        auth_config="AUTH='--auth-saml-enabled=true \\
+      --auth-saml-url=${SAML_URL}'"
+    else
+        error "Unsupported authentication provider: $AUTH_PROVIDER"
+    fi
+    
+    # Create omni.env file
+    cat > omni.env << EOF
+# Omni
+OMNI_IMG_TAG=${OMNI_VERSION}
+OMNI_ACCOUNT_UUID=${OMNI_ACCOUNT_UUID}
+NAME=omni
+EVENT_SINK_PORT=8091
+
+## Keys and Certs
+TLS_CERT=/etc/letsencrypt/live/${OMNI_DOMAIN_NAME}/fullchain.pem
+TLS_KEY=/etc/letsencrypt/live/${OMNI_DOMAIN_NAME}/privkey.pem
+ETCD_VOLUME_PATH=${INSTALL_DIR}/etcd
+ETCD_ENCRYPTION_KEY=${INSTALL_DIR}/omni.asc
+
+## Binding
+BIND_ADDR=0.0.0.0:443
+MACHINE_API_BIND_ADDR=0.0.0.0:8090
+K8S_PROXY_BIND_ADDR=0.0.0.0:8100
+
+## Domains and Advertisements
+OMNI_DOMAIN_NAME="${OMNI_DOMAIN_NAME}"
+ADVERTISED_API_URL="https://\${OMNI_DOMAIN_NAME}"
+SIDEROLINK_ADVERTISED_API_URL="https://\${OMNI_DOMAIN_NAME}:8090/"
+ADVERTISED_K8S_PROXY_URL="https://\${OMNI_DOMAIN_NAME}:8100/"
+SIDEROLINK_WIREGUARD_ADVERTRISED_ADDR="${OMNI_WG_IP}:50180"
+
+## Users
+INITIAL_USER_EMAILS='${OMNI_ADMIN_EMAIL}'
+
+## Authentication
+${auth_config}
+EOF
+
+    log "Omni environment configuration generated for ${AUTH_PROVIDER} authentication"
 }
 
 # Display SSL certificate generation instructions
@@ -425,6 +512,8 @@ ${GREEN}========================================================================
 
 Installation completed successfully! Next steps:
 
+${YELLOW}Authentication Provider: ${AUTH_PROVIDER}${NC}
+
 1. ${YELLOW}Configure firewall (AlmaLinux specific):${NC}
    ${BLUE}sudo systemctl start firewalld${NC}
    ${BLUE}sudo firewall-cmd --permanent --add-service=http${NC}
@@ -456,6 +545,25 @@ ${GREEN}Files created:${NC}
 - $INSTALL_DIR/compose.yaml (docker-compose file)
 - $INSTALL_DIR/omni-vars.env (environment variables)
 - $INSTALL_DIR/omni.asc (GPG key for etcd encryption)
+
+${YELLOW}Authentication Setup (${AUTH_PROVIDER}):${NC}
+$(if [[ "$AUTH_PROVIDER" == "auth0" ]]; then
+cat << 'AUTH0_EOF'
+- Ensure your Auth0 application is configured:
+  * Allowed Callback URLs: https://your-domain.com
+  * Allowed Web Origins: https://your-domain.com
+  * Allowed Logout URLs: https://your-domain.com
+- Users will authenticate through Auth0 when accessing Omni
+AUTH0_EOF
+elif [[ "$AUTH_PROVIDER" == "saml" ]]; then
+cat << 'SAML_EOF'
+- Ensure your SAML provider (Keycloak) is configured:
+  * Valid Redirect URIs: https://your-domain.com/*
+  * Master SAML Processing URL: https://your-domain.com/saml/acs
+  * Configure attribute mappings for email, first name, last name
+- Users will authenticate through SAML when accessing Omni
+SAML_EOF
+fi)
 
 ${YELLOW}Important Notes for AlmaLinux:${NC}
 - Ensure your domain DNS points to this server

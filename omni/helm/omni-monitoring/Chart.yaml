@@ -1,0 +1,29 @@
+apiVersion: v2
+name: omni-monitoring
+description: Monitoring stack for Omni (Prometheus, Grafana, Loki)
+type: application
+version: 0.1.0
+appVersion: "2.54.1"
+
+keywords:
+- monitoring
+- prometheus
+- grafana
+- loki
+- observability
+
+home: https://prometheus.io/
+sources:
+- https://github.com/prometheus/prometheus
+- https://github.com/grafana/grafana
+- https://github.com/grafana/loki
+
+maintainers:
+- name: Prometheus Team
+  email: prometheus-developers@googlegroups.com
+
+dependencies: []
+
+annotations:
+  category: Monitoring
+  licenses: Apache-2.0

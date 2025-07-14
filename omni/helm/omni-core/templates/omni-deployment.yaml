@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "omni-core.fullname" . }}-omni
+  labels:
+    {{- include "omni-core.labels" . | nindent 4 }}
+    app.kubernetes.io/component: omni
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.omni.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "omni-core.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: omni
+  template:
+    metadata:
+      labels:
+        {{- include "omni-core.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: omni
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: omni
+        image: {{ .Values.omni.image.repository }}:{{ .Values.omni.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.omni.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.omni.service.targetPort }}
+          protocol: TCP
+        - name: wireguard
+          containerPort: 50180
+          protocol: UDP
+        env:
+        - name: OMNI_ACCOUNT_UUID
+          value: {{ .Values.omni.config.accountUuid | quote }}
+        - name: OMNI_NAME
+          value: {{ .Values.omni.config.name | quote }}
+        - name: OMNI_WG_IP
+          value: {{ .Values.omni.config.wireguardIP | quote }}
+        - name: OMNI_DOMAIN
+          value: {{ include "omni-core.domain" . | quote }}
+        {{- if .Values.auth.external.enabled }}
+        {{- if eq .Values.auth.external.type "saml" }}
+        - name: OMNI_AUTH_SAML_URL
+          value: {{ .Values.auth.external.samlUrl | quote }}
+        {{- else if eq .Values.auth.external.type "oidc" }}
+        - name: OMNI_AUTH_OIDC_CLIENT_ID
+          value: {{ .Values.auth.external.oidcClientId | quote }}
+        - name: OMNI_AUTH_OIDC_DOMAIN
+          value: {{ .Values.auth.external.oidcDomain | quote }}
+        {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/omni
+        - name: tls
+          mountPath: /etc/ssl/certs/omni
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          {{- toYaml .Values.omni.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data
+        {{- if .Values.omni.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "omni-core.fullname" . }}-omni-data
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      - name: tls
+        secret:
+          secretName: {{ .Values.omni.tls.secretName | default (printf "%s-tls" (include "omni-core.fullname" .)) }}
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

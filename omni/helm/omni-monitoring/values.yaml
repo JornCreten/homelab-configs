@@ -1,0 +1,307 @@
+# Monitoring Stack Configuration
+# Prometheus, Grafana, and Loki for observability
+
+global:
+  domain: omni.example.com
+  timezone: UTC
+
+# Prometheus Configuration
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: "v2.54.1"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 9090
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  # Prometheus configuration
+  config:
+    # Global configuration
+    global:
+      scrapeInterval: 15s
+      evaluationInterval: 15s
+
+    # Retention
+    retention: "30d"
+    retentionSize: "10GB"
+
+    # Storage
+    storage:
+      tsdb:
+        path: /prometheus
+        retention: "30d"
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 20Gi
+
+  # Service discovery and scrape configs
+  scrapeConfigs:
+  - job_name: 'prometheus'
+    static_configs:
+    - targets: [ 'localhost:9090' ]
+
+  - job_name: 'omni'
+    static_configs:
+    - targets: [ 'omni-core-omni:8080' ]
+
+  - job_name: 'nginx'
+    static_configs:
+    - targets: [ 'omni-core-nginx:8080' ]
+    metrics_path: /nginx_status
+
+  - job_name: 'redis'
+    static_configs:
+    - targets: [ 'omni-core-redis:6379' ]
+
+# Grafana Configuration
+grafana:
+  enabled: true
+  image:
+    repository: grafana/grafana
+    tag: "11.2.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+  # Grafana configuration
+  config:
+    adminUser: admin
+    adminPassword: "" # Will be generated if empty
+
+    # Database configuration (SQLite by default)
+    database:
+      type: sqlite3
+      path: /var/lib/grafana/grafana.db
+
+    # Security
+    security:
+      adminUser: admin
+      secretKey: "" # Will be generated if empty
+
+    # Server configuration
+    server:
+      domain: grafana.omni.example.com
+      rootUrl: "https://grafana.omni.example.com"
+      serveFromSubPath: false
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 5Gi
+
+  # Datasources
+  datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://omni-monitoring-prometheus:9090
+    access: proxy
+    isDefault: true
+
+  - name: Loki
+    type: loki
+    url: http://omni-monitoring-loki:3100
+    access: proxy
+
+  # Dashboards
+  dashboards:
+    enabled: true
+    configMaps:
+    - omni-monitoring-dashboards
+
+# Loki Configuration
+loki:
+  enabled: true
+  image:
+    repository: grafana/loki
+    tag: "3.1.1"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 3100
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+  # Loki configuration
+  config:
+    # Server configuration
+    server:
+      httpListenPort: 3100
+      grpcListenPort: 9096
+
+    # Common configuration
+    common:
+      pathPrefix: /loki
+      storage:
+        filesystem:
+          chunksDirectory: /loki/chunks
+          rulesDirectory: /loki/rules
+      replicationFactor: 1
+      ring:
+        kvStore:
+          store: inmemory
+
+    # Query range configuration
+    queryRange:
+      resultsCache:
+        cache:
+          enableFifocache: true
+          fifocache:
+            maxSizeItems: 1024
+            validity: 24h
+
+    # Schema configuration
+    schemaConfig:
+      configs:
+      - from: "2020-10-24"
+        store: boltdb-shipper
+        objectStore: filesystem
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+
+    # Ruler configuration
+    ruler:
+      storage:
+        type: local
+        local:
+          directory: /loki/rules
+      rule_path: /loki/rules
+      ring:
+        kvStore:
+          store: inmemory
+      enableAPI: true
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+# Nginx Configuration (for SSL termination)
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: alpine
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: LoadBalancer
+    ports:
+      http: 80
+      https: 443
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Ingress Configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    prometheus:
+      host: prometheus.omni.example.com
+      paths:
+      - path: /
+        pathType: Prefix
+    grafana:
+      host: grafana.omni.example.com
+      paths:
+      - path: /
+        pathType: Prefix
+    loki:
+      host: loki.omni.example.com
+      paths:
+      - path: /
+        pathType: Prefix
+  tls:
+  - secretName: monitoring-tls
+    hosts:
+    - prometheus.omni.example.com
+    - grafana.omni.example.com
+    - loki.omni.example.com
+
+# Service Monitor for self-monitoring
+serviceMonitor:
+  enabled: true
+  namespace: ""
+  labels: {}
+  interval: 30s
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selector, tolerations, and affinity
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Additional labels and annotations
+labels: {}
+annotations: {}

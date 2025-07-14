@@ -1,0 +1,211 @@
+# Core Omni Configuration
+# Contains only essential components: Omni, Nginx, Redis
+
+global:
+  domain: omni.example.com
+  timezone: UTC
+
+# Omni Configuration
+omni:
+  image:
+    repository: ghcr.io/siderolabs/omni
+    tag: "0.41.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  # Omni-specific configuration
+  config:
+    accountUuid: "" # Generate with uuidgen
+    wireguardIP: "10.10.1.100"
+    name: "omni"
+
+  # Persistence for Omni data
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  # TLS certificates
+  tls:
+    enabled: true
+    secretName: omni-tls
+    # If using cert-manager
+    certManager:
+      enabled: false
+      issuer: letsencrypt-prod
+
+# Nginx Configuration (Essential - SSL termination and routing)
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: alpine
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: LoadBalancer
+    ports:
+      http: 80
+      https: 443
+      status: 8080
+      machineAPI: 8090
+      k8sProxy: 8100
+      wireguard: 50180
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Nginx configuration
+  config:
+    workerProcesses: auto
+    workerConnections: 1024
+    clientMaxBodySize: 100m
+
+  # SSL configuration
+  ssl:
+    enabled: true
+    protocols: "TLSv1.2 TLSv1.3"
+    ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+
+  # Rate limiting
+  rateLimiting:
+    enabled: true
+    requests: 20
+    burst: 30
+
+# Redis Configuration (Essential - Session storage and caching)
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 6379
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Redis configuration
+  config:
+    maxMemory: 256mb
+    maxMemoryPolicy: allkeys-lru
+
+  # Redis persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 2Gi
+
+  # Redis authentication
+  auth:
+    enabled: true
+    password: "" # Will be generated if empty
+
+# Authentication Configuration
+auth:
+  # External authentication (use existing SAML/OIDC provider)
+  external:
+    enabled: false
+    type: saml # or oidc
+    samlUrl: ""
+    oidcClientId: ""
+    oidcDomain: ""
+
+  # Embedded authentication (deploy Keycloak - use omni-auth chart instead)
+  embedded:
+    enabled: false
+
+# Ingress Configuration (Alternative to nginx service)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+  - host: omni.example.com
+    paths:
+    - path: /
+      pathType: Prefix
+  tls:
+  - secretName: omni-tls
+    hosts:
+    - omni.example.com
+
+# Storage Class Configuration
+storageClass:
+  # Create a storage class for Omni (optional)
+  create: false
+  name: omni-storage
+  provisioner: kubernetes.io/no-provisioner
+  parameters: {}
+  reclaimPolicy: Retain
+  volumeBindingMode: WaitForFirstConsumer
+
+# Service Monitor for Prometheus (if monitoring is enabled separately)
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  interval: 30s
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selector, tolerations, and affinity
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Additional labels for all resources
+labels: {}
+
+# Additional annotations for all resources
+annotations: {}
