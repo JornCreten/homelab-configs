@@ -1,0 +1,59 @@
+# Docker Compose Override Example
+# This file shows how to customize the Omni deployment
+# Copy sections to docker-compose.override.yml as needed
+
+version: '3.8'
+
+services:
+  omni:
+    # Custom resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    
+    # Additional environment variables
+    environment:
+      - OMNI_LOG_LEVEL=debug
+      - OMNI_FEATURE_FLAGS=feature1,feature2
+    
+    # Custom volumes for persistent data
+    volumes:
+      - omni_data:/var/lib/omni
+      - omni_config:/etc/omni
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  omni_data:
+    driver: local
+  omni_config:
+    driver: local
+
+# For production setups, consider:
+# - Setting up log rotation
+# - Using external databases
+# - Configuring backup strategies
+# - Setting up monitoring
+# - Using secrets management
