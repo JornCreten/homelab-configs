@@ -60,7 +60,7 @@ services:
 
   # Identity Provider - Keycloak (if using SAML)
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0
+    image: quay.io/keycloak/keycloak:26.7
     container_name: bastion-keycloak
     restart: unless-stopped
     command: start --optimized
@@ -99,7 +99,7 @@ services:
 
   # Database for Keycloak and other services
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: bastion-postgres
     restart: unless-stopped
     environment:
@@ -122,7 +122,7 @@ services:
 
   # Redis for session storage and caching
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: bastion-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
@@ -164,7 +164,7 @@ services:
 
   # Container Registry for storing images
   registry:
-    image: registry:2
+    image: registry:3
     container_name: bastion-registry
     restart: unless-stopped
     environment:
